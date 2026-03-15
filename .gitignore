@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 模型文件（如果太大，建议使用 Git LFS）
+# *.pkl
+# models/*.pkl
+
+# 日志
+*.log
+
+# 临时文件
+tmp/
+temp/
