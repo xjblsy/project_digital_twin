@@ -16,7 +16,10 @@ CORS(app)
 from predictor import FloodRiskPredictor
 
 # 全局预测器实例
-predictor = FloodRiskPredictor(model_dir = './models')
+import os
+model_dir = os.path.join(os.path.dirname(__file__), '..', 'models')
+predictor = FloodRiskPredictor(model_dir = model_dir)
+
 if not predictor.load_model():
     logger.error("❌ 模型加载失败")
     raise RuntimeError("模型加载失败")
