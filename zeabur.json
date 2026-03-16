@@ -1,0 +1,12 @@
+{
+  "$schema": "https://zeabur.com/zeabur.schema.json",
+  "build": {
+    "env": {
+      "PYTHON_VERSION": "3.10"
+    }
+  },
+  "deploy": {
+    "startCommand": "cd backend && gunicorn --bind 0.0.0.0:$PORT app:app",
+    "restartPolicy": "on-failure"
+  }
+}
