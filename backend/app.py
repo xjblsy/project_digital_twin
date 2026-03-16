@@ -15,14 +15,13 @@ CORS(app)
 # 导入优化后的预测器
 from predictor import FloodRiskPredictor
 
-# 全局预测器实例
-import os
+# 全局预测器实例 - 使用绝对路径
 model_dir = os.path.join(os.path.dirname(__file__), '..', 'models')
-predictor = FloodRiskPredictor(model_dir = model_dir)
-
+predictor = FloodRiskPredictor(model_dir=model_dir)
 if not predictor.load_model():
     logger.error("❌ 模型加载失败")
     raise RuntimeError("模型加载失败")
+
 
 @app.route('/health', methods=['GET'])
 def health_check():
