@@ -4,9 +4,28 @@ import pandas as pd
 from datetime import datetime
 import logging
 import os
+import sys
+
+# 配置结构化日志
+class JSONFormatter(logging.Formatter):
+    def format(self, record):
+        log_entry = {
+            'timestamp': datetime.fromtimestamp(record.created).isoformat(),
+            'level': record.levelname,
+            'module': record.module,
+            'function': record.funcName,
+            'line': record.lineno,
+            'message': record.getMessage()
+        }
+        return json.dumps(log_entry, ensure_ascii=False)
+
+import json
 
 # 配置日志
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
@@ -70,7 +89,8 @@ def index():
             'batch_predict': 'POST /batch_predict'
         },
         'model_loaded': MODEL_LOADED,
-        'model_path': model_dir,  # 显示当前使用的模型路径
+        'model_path': model_dir,
+        'environment': os.environ.get('FLASK_ENV', 'production'),
         'status': 'running'
     })
 
@@ -81,7 +101,8 @@ def health_check():
     return jsonify({
         'status': 'healthy',
         'model_loaded': MODEL_LOADED,
-        'model_path': model_dir,  # 显示当前使用的模型路径
+        'model_path': model_dir,
+        'environment': os.environ.get('FLASK_ENV', 'production'),
         'timestamp': datetime.now().isoformat(),
         'service': 'Flood Risk Prediction API'
     })
@@ -208,6 +229,10 @@ def batch_predict():
         }), 500
 
 
+# 为生产环境准备，当使用 Gunicorn 时不需要这个块
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 8080))
-    app.run(host='0.0.0.0', port=port, debug=False)
+    # 生产环境由 Gunicorn 启动，开发环境可用 Flask 开发服务器
+    import os
+    if os.environ.get('FLASK_ENV') == 'development':
+        port = int(os.environ.get('PORT', 8080))
+        app.run(host='0.0.0.0', port=port, debug=False)
