@@ -15,12 +15,37 @@ CORS(app)
 # 导入优化后的预测器
 from predictor import FloodRiskPredictor
 
-# 全局预测器实例 - 使用绝对路径
-model_dir = os.path.join(os.path.dirname(__file__), '..', 'models')
-predictor = FloodRiskPredictor(model_dir=model_dir)
-if not predictor.load_model():
-    logger.error("❌ 模型加载失败")
-    raise RuntimeError("模型加载失败")
+# 模型初始化 - 改进版
+model_dir = os.environ.get('MODEL_DIR', 
+                          os.path.join(os.path.dirname(__file__), '..', 'models'))
+try:
+    predictor = FloodRiskPredictor(model_dir=model_dir)
+    if predictor.load_model():
+        logger.info("✅ 模型加载成功")
+        MODEL_LOADED = True
+    else:
+        logger.error("❌ 模型加载失败")
+        MODEL_LOADED = False
+except Exception as e:
+    logger.error(f"模型初始化异常：{e}")
+    MODEL_LOADED = False
+    predictor = None
+
+
+@app.route('/', methods=['GET'])
+def index():
+    """根路由 - 返回 API 信息"""
+    return jsonify({
+        'service': 'Flood Risk Prediction API',
+        'version': '1.0',
+        'endpoints': {
+            'health': 'GET /health',
+            'predict': 'POST /predict',
+            'batch_predict': 'POST /batch_predict'
+        },
+        'model_loaded': MODEL_LOADED,
+        'status': 'running'
+    })
 
 
 @app.route('/health', methods=['GET'])
@@ -28,24 +53,24 @@ def health_check():
     """健康检查接口"""
     return jsonify({
         'status': 'healthy',
-        'model_loaded': predictor.is_loaded,
+        'model_loaded': MODEL_LOADED,
         'timestamp': datetime.now().isoformat(),
         'service': 'Flood Risk Prediction API'
     })
+
 
 @app.route('/predict', methods=['POST'])
 def predict_risk():
     """
     风险预测接口
-    
-    请求体:
-    {
-        "historical_data": [
-            {"date": "2025-01-01", "water_level": 52.5, "precipitation": 10, "temperature": 25, "humidity": 70},
-            ...
-        ]
-    }
     """
+    # 检查模型是否已加载
+    if not MODEL_LOADED or predictor is None:
+        return jsonify({
+            'success': False,
+            'error': '模型未加载，请检查服务器状态'
+        }), 500
+    
     try:
         data = request.get_json()
         
@@ -57,11 +82,26 @@ def predict_risk():
         
         df_history = pd.DataFrame(data['historical_data'])
         
+        # 数据验证
+        required_cols = ['date', 'water_level']
+        missing_cols = [col for col in required_cols if col not in df_history.columns]
+        if missing_cols:
+            return jsonify({
+                'success': False,
+                'error': f'缺少必要列：{missing_cols}'
+            }), 400
+
+        if len(df_history) < 14:
+            return jsonify({
+                'success': False,
+                'error': f'历史数据不足，至少需要 14 天，当前只有 {len(df_history)} 天'
+            }), 400
+        
         # 执行预测
         result = predictor.predict(df_history)
         result['success'] = True
         
-        logger.info(f"✅ 预测成功 | 日期: {result['prediction_date']} | 风险: {result['risk_label']}")
+        logger.info(f"✅ 预测成功 | 风险等级: {result['risk_level']} | 风险值: {result['risk']}")
         
         return jsonify(result)
         
@@ -72,9 +112,17 @@ def predict_risk():
             'error': str(e)
         }), 500
 
+
 @app.route('/batch_predict', methods=['POST'])
 def batch_predict():
     """批量预测接口"""
+    # ✅ 添加模型检查
+    if not MODEL_LOADED or predictor is None:
+        return jsonify({
+            'success': False,
+            'error': '模型未加载，请检查服务器状态'
+        }), 500
+    
     try:
         data = request.get_json()
         
@@ -88,8 +136,29 @@ def batch_predict():
         for i, dataset in enumerate(data['datasets']):
             try:
                 df_history = pd.DataFrame(dataset)
+                
+                # 对每个数据集也进行基本验证
+                required_cols = ['date', 'water_level']
+                missing_cols = [col for col in required_cols if col not in df_history.columns]
+                if missing_cols:
+                    results.append({
+                        'dataset_index': i,
+                        'success': False,
+                        'error': f'缺少必要列：{missing_cols}'
+                    })
+                    continue
+
+                if len(df_history) < 14:
+                    results.append({
+                        'dataset_index': i,
+                        'success': False,
+                        'error': f'历史数据不足，至少需要 14 天，当前只有 {len(df_history)} 天'
+                    })
+                    continue
+                
                 result = predictor.predict(df_history)
                 result['dataset_index'] = i
+                result['success'] = True
                 results.append(result)
             except Exception as e:
                 results.append({
@@ -110,7 +179,7 @@ def batch_predict():
             'error': str(e)
         }), 500
 
+
 if __name__ == '__main__':
-    import os
-    port = int(os.environ.get('PORT', 8080))  # Zeabur 默认端口 8080
+    port = int(os.environ.get('PORT', 8080))
     app.run(host='0.0.0.0', port=port, debug=False)
