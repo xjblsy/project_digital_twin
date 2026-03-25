@@ -32,7 +32,8 @@ app = Flask(__name__)
 CORS(app)
 
 # 导入优化后的预测器
-from predictor import FloodRiskPredictor
+from .predictor import FloodRiskPredictor
+
 
 # 模型初始化 - 改进版，支持多种部署环境
 def get_model_directory():
